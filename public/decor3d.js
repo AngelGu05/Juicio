@@ -21,6 +21,8 @@ Object.assign(Stage3D, {
     const pic = (w, h, p, ry, t) => { const o = put(plane(w, h), new THREE.MeshBasicMaterial({ map: t }), p, [0, ry || 0, 0]); o.castShadow = false; return o; };
     const flat = (w, d, color, p) => { const o = put(plane(w, d), color, p, [-Math.PI / 2, 0, 0]); o.castShadow = false; return o; };
 
+    // pared del frente: solo se ve desde dentro (primera persona)
+    put(plane(14, 6.5), '#1d4b46', [0, 3.25, 7.5], [0, Math.PI, 0]).castShadow = false; put(plane(14, 1.3), DARK, [0, 0.65, 7.48], [0, Math.PI, 0]).castShadow = false;
     // alfombra del pasillo central
     flat(2.6, 10.6, '#8f1d2c', [0, 0.012, 2.1]); [-1, 1].forEach(k => flat(0.14, 10.6, GOLD, [k * 1.12, 0.016, 2.1]));
 
@@ -145,7 +147,12 @@ Object.assign(Stage3D, {
           const e = 1 - Math.pow(1 - sg.k, 3), p = c.g.position, dist = this.camera.position.distanceTo(p);
           sg.g.scale.setScalar(Math.max(0.001, e)); sg.g.position.y = -0.7 * (1 - e);
           sg.board.scale.setScalar(Math.max(0.85, Math.min(1.5, dist / 12)));
-          sg.board.rotation.y = Math.atan2(this.camera.position.x - p.x, this.camera.position.z - p.z) - c.g.rotation.y;
+          // En primera persona, tu propio cartel se gira hacia ti y baja para que lo veas.
+          const own = this.isFp && id === App.me;
+          sg.board.position.set(0, own ? 2.4 : 3.25, own ? 1.7 : 0);
+          if (own) sg.board.scale.setScalar(0.38);
+          sg.g.children[0].visible = !own;
+          sg.board.rotation.y = own ? Math.PI : Math.atan2(this.camera.position.x - p.x, this.camera.position.z - p.z) - c.g.rotation.y;
           sg.board.rotation.z = Math.sin(ms * 0.006) * 0.05;
         }
       }

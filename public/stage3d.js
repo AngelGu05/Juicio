@@ -2,7 +2,8 @@
 const Stage3D = {
   ok: false, failed: false, chars: {}, toms: [], t: 0,
   VIEWS: { galeria: { az: 0, pol: 0.98, r: 12.8 }, juez: { az: Math.PI, pol: 0.92, r: 12.5 }, lado: { az: 1.05, pol: 1.0, r: 13.5 } },
-  cam: { az: 0, pol: 0.98, r: 12.8 }, want: { az: 0, pol: 0.98, r: 12.8 }, view: 'galeria',
+  cam: { az: 0, pol: 0.98, r: 12.8 }, want: { az: 0, pol: 0.98, r: 12.8 }, view: 'galeria', fp: { yaw: 0, pitch: -0.03 },
+  NAMES: { yo: 'Primera persona', galeria: 'Galería', juez: 'Estrado del juez', lado: 'Lateral' },
 
   init() {
     if (this.ok || this.failed) return this.ok;
@@ -85,7 +86,7 @@ const Stage3D = {
   sync(s) {
     const now = App.now(), ps = Game.list(s), pub = ps.filter(p => p.role === 'publico' && p.id !== s.witness), seen = {};
     const trial = s.code + '|' + (s.kase ? s.kase.title : '');
-    if (this._trial !== trial) { this._trial = trial; this.setView((App.player() || {}).role === 'juez' ? 'juez' : 'galeria'); }
+    if (this._trial !== trial) { this._trial = trial; this.setView(App.mode === 'online' ? 'yo' : (App.player() || {}).role === 'juez' ? 'juez' : 'galeria'); }
     ps.forEach(p => {
       seen[p.id] = 1;
       const sig = p.role + JSON.stringify(p.acc) + (p.jailedUntil > now) + (Court.splat[p.id] > Date.now()) + p.on;
@@ -109,8 +110,15 @@ const Stage3D = {
     this.screen.userData.zoom = key;
   },
 
-  setView(name) { this.view = name; Object.assign(this.want, this.VIEWS[name]); },
-  nextView() { const k = Object.keys(this.VIEWS); this.setView(k[(k.indexOf(this.view) + 1) % k.length]); },
+  // 'yo' es la vista en primera persona: la cámara va en los ojos de tu personaje.
+  setView(name) {
+    this.view = name; this.isFp = name === 'yo';
+    if (this.isFp) { this.fp.yaw = 0; this.fp.pitch = -0.03; } else Object.assign(this.want, this.VIEWS[name]);
+    this.camera.fov = this.isFp ? 68 : 42; this.camera.updateProjectionMatrix();
+    $('stageHint').textContent = (this.isFp ? 'Estás viendo con los ojos de tu personaje. Arrastra para mirar alrededor.' : 'Arrastra para girar la sala.') + ' Toca a un personaje para ver qué puedes hacerle.';
+    $('btnCam').textContent = 'Cámara: ' + this.NAMES[name];
+  },
+  nextView() { const k = ['yo'].concat(Object.keys(this.VIEWS)); this.setView(k[(k.indexOf(this.view) + 1) % k.length]); },
 
   project(x, y, z) { const v = this.v.set(x, y, z).project(this.camera); return v.z > 1 ? null : [(v.x * 0.5 + 0.5) * 100, (-v.y * 0.5 + 0.5) * 100]; },
   head(id, dy) { const c = this.chars[id]; if (!c) return [50, 50]; const p = c.g.position; return this.project(p.x, p.y + (dy || 2.5), p.z) || [50, 50]; },
@@ -129,6 +137,7 @@ const Stage3D = {
       if (!down) return; const dx = e.clientX - down[0], dy = e.clientY - down[1];
       if (!moved && Math.abs(dx) + Math.abs(dy) < 6) return;
       moved = true; down = [e.clientX, e.clientY];
+      if (this.isFp) { this.fp.yaw += dx * 0.005; this.fp.pitch = Math.max(-1, Math.min(0.9, this.fp.pitch + dy * 0.004)); return; }
       this.want.az -= dx * 0.007; this.want.pol = Math.max(0.3, Math.min(1.45, this.want.pol - dy * 0.005));
     });
     el.addEventListener('pointerup', () => { down = null; }); el.addEventListener('pointercancel', () => { down = null; });
@@ -153,6 +162,13 @@ const Stage3D = {
     const sh = this.shake > 0 ? (this.shake -= dt * 3, Math.sin(ms * 0.09) * 0.12 * Math.max(0, this.shake)) : 0;
     this.camera.position.set(this.target.x + c.r * Math.sin(c.pol) * Math.sin(c.az) + sh, this.target.y + c.r * Math.cos(c.pol) + sh, this.target.z + c.r * Math.sin(c.pol) * Math.cos(c.az));
     this.camera.lookAt(this.target);
+    const mine = this.isFp && this.chars[App.me];
+    if (mine) {
+      const p = mine.g.position, yaw = mine.g.rotation.y + this.fp.yaw, cp = Math.cos(this.fp.pitch);
+      this.camera.position.set(p.x + sh, p.y + 1.55 + sh, p.z);
+      this.camera.lookAt(p.x + Math.sin(yaw) * cp, p.y + 1.55 + Math.sin(this.fp.pitch), p.z + Math.cos(yaw) * cp);
+    }
+    for (const id in this.chars) { const ch = this.chars[id]; if (ch.mesh) ch.mesh.visible = ch !== mine; }
     if (this.gavelT > 0) { this.gavelT -= dt * 3; this.gavel.rotation.z = -1.2 + (this.gavelT > 0 ? Math.sin(this.gavelT * Math.PI * 2) * 0.9 : 0); }
     for (const id in this.chars) {
       const ch = this.chars[id], g = ch.g, to = ch.to;
@@ -161,7 +177,7 @@ const Stage3D = {
       g.position.y += (y - g.position.y) * Math.min(1, k * 3);
       g.rotation.y += (to[3] - g.rotation.y) * k; g.scale.y = 1 + Math.sin(ms * 0.003 + ch.ph) * 0.015;
       const p = this.project(g.position.x, g.position.y + 2.05, g.position.z);
-      ch.lab.hidden = !p; if (p) { ch.lab.style.left = p[0] + '%'; ch.lab.style.top = p[1] + '%'; }
+      ch.lab.hidden = !p || ch === mine; if (p) { ch.lab.style.left = p[0] + '%'; ch.lab.style.top = p[1] + '%'; }
     }
     const sp = this.chars[this.speaker]; this.ring.visible = !!sp;
     if (sp) this.ring.position.set(sp.g.position.x, sp.to[1] + 0.06 + Math.sin(ms * 0.004) * 0.03, sp.g.position.z);
