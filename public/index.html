@@ -1,0 +1,104 @@
+<title>Con Todo Respeto, Su Señoría</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="style.css">
+
+<div id="who" class="who" hidden></div>
+
+<main id="app">
+  <section id="home" class="screen home">
+    <div class="marquee">
+      <p class="eyebrow">Un juicio de mentira, con discusiones de verdad</p>
+      <h1>Con Todo Respeto,<br><span>Su Señoría</span></h1>
+      <div id="homeCast" class="cast"></div>
+    </div>
+    <div class="card homeCard">
+      <label for="nameInput">¿Cómo te llamas?</label>
+      <input id="nameInput" type="text" maxlength="16" placeholder="Tu nombre" autocomplete="off">
+      <div id="onlineBox" class="stack">
+        <button id="btnCreate" class="btn big gold">Crear sala en línea</button>
+        <div class="row">
+          <input id="codeInput" type="text" maxlength="4" placeholder="CÓDIGO" autocomplete="off" aria-label="Código de la sala">
+          <button id="btnJoin" class="btn">Unirme</button>
+        </div>
+      </div>
+      <p id="onlineNote" class="note" hidden>El modo en línea funciona cuando el juego corre en su propio servidor. Aquí puedes jugar en una sola pantalla.</p>
+      <button id="btnLocal" class="btn big">Jugar en una sola pantalla</button>
+      <p class="note">Mínimo 3 jugadores: juez, demandante y demandado. Sin máximo: los demás son el público.</p>
+    </div>
+  </section>
+
+  <section id="lobby" class="screen lobby" hidden>
+    <header class="bar">
+      <h2>Sala de espera</h2>
+      <div id="lobbyCode" class="code"></div>
+      <button id="btnLeave" class="btn small ghost">Salir</button>
+    </header>
+    <div class="lobbyGrid">
+      <div class="card">
+        <h3>Roles</h3>
+        <div id="roleGrid" class="roleGrid"></div>
+        <div id="lobbyRoleTools" class="row wrap"></div>
+        <div id="localAdd" class="row" hidden>
+          <input id="localName" type="text" maxlength="16" placeholder="Nombre del jugador" autocomplete="off" aria-label="Nombre del jugador nuevo">
+          <button id="btnAddLocal" class="btn">Agregar jugador</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3 id="lookTitle">Tu personaje</h3>
+        <div class="look">
+          <div id="lookPreview" class="lookPreview"></div>
+          <div id="lookOpts" class="lookOpts"></div>
+        </div>
+      </div>
+      <div class="card span2">
+        <h3>El caso</h3>
+        <div id="caseBox"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="court" class="screen court" hidden>
+    <header class="bar">
+      <div class="phase"><strong id="phaseName"></strong><span id="phaseHint"></span></div>
+      <div id="timer" class="timer" hidden></div>
+      <button id="btnCam" class="btn small ghost" hidden>Cambiar cámara</button>
+      <button id="btnView" class="btn small ghost">Ver en 2D</button>
+      <div id="courtCode" class="code"></div>
+    </header>
+    <div class="courtGrid">
+      <div class="stageWrap"><div id="stage" class="stage"></div><p id="stageHint" class="stageHint" hidden>Arrastra para girar la sala. Toca a un personaje para ver qué puedes hacerle.</p></div>
+      <aside class="side">
+        <div id="actions" class="card panel"></div>
+        <div id="secret" class="card panel"></div>
+        <div id="evidence" class="card panel"></div>
+        <div class="card panel chat">
+          <h3>Chat y carteles</h3>
+          <div id="log" class="log"></div>
+          <form id="chatForm" class="row">
+            <input id="chatInput" type="text" maxlength="120" placeholder="Escribe y tu personaje levanta un cartel" autocomplete="off" aria-label="Mensaje">
+            <button class="btn">Enviar</button>
+          </form>
+          <div id="reacts" class="row wrap"></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+</main>
+
+<div id="menu" class="menu" hidden></div>
+<div id="modal" class="modal" hidden></div>
+<div id="toast" class="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="data.js"></script>
+<script src="game.js"></script>
+<script src="avatar.js"></script>
+<script src="net.js"></script>
+<script src="lobby.js"></script>
+<script src="chars3d.js"></script>
+<script src="stage3d.js"></script>
+<script src="decor3d.js"></script>
+<script src="court.js"></script>
+<script src="panels.js"></script>
+<script src="evidence.js"></script>
