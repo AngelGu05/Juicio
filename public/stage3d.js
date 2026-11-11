@@ -76,6 +76,7 @@ const Stage3D = {
   // Dónde se para cada quien: [x, y, z, giro]
   spot(s, p, pub) {
     if (p.id === s.witness) return [3.3, 0.3, -4.55, 0];
+    const mp = this.mine[p.id] || p.pos; if (mp) return [mp.x, this.floorY(mp.x, mp.z), mp.z, mp.r];
     const sp = { juez: [0, 0.6, -5.35, 0], policia: [-3.0, 0, -4.0, 0.25], abogado_dte: [-4.19, 0, -2.33, 0.93], demandante: [-4.97, 0, -1.29, 0.93],
       abogado_ddo: [4.19, 0, -2.33, -0.93], demandado: [4.97, 0, -1.29, -0.93] }[p.role];
     if (sp) return sp;
@@ -115,7 +116,7 @@ const Stage3D = {
     this.view = name; this.isFp = name === 'yo';
     if (this.isFp) { this.fp.yaw = 0; this.fp.pitch = -0.03; } else Object.assign(this.want, this.VIEWS[name]);
     this.camera.fov = this.isFp ? 68 : 42; this.camera.updateProjectionMatrix();
-    $('stageHint').textContent = (this.isFp ? 'Estás viendo con los ojos de tu personaje. Arrastra para mirar alrededor.' : 'Arrastra para girar la sala.') + ' Toca a un personaje para ver qué puedes hacerle.';
+    $('stageHint').textContent = (this.isFp ? 'Estás viendo con los ojos de tu personaje. Arrastra para mirar alrededor.' : 'Arrastra para girar la sala.') + ' Camina con WASD, las flechas o los botones. Toca personajes y objetos para interactuar.';
     $('btnCam').textContent = 'Cámara: ' + this.NAMES[name];
   },
   nextView() { const k = ['yo'].concat(Object.keys(this.VIEWS)); this.setView(k[(k.indexOf(this.view) + 1) % k.length]); },
@@ -148,7 +149,7 @@ const Stage3D = {
       const hit = this.ray.intersectObjects(Object.values(this.chars).map(c => c.g).concat(this.screen), true)[0];
       let o = hit && hit.object; while (o && !o.userData.pid && !o.userData.zoom) o = o.parent;
       if (o && o.userData.pid) Court.menu(o.userData.pid, e.clientX, e.clientY);
-      else { $('menu').hidden = true; if (o && o.userData.zoom) Evidence.zoom(o.userData.zoom); }
+      else { $('menu').hidden = true; if (o && o.userData.zoom) Evidence.zoom(o.userData.zoom); else this.clickThing(); }
     });
     el.addEventListener('wheel', e => { e.preventDefault(); this.want.r = Math.max(6, Math.min(22, this.want.r + e.deltaY * 0.01)); }, { passive: false });
   },
@@ -175,7 +176,7 @@ const Stage3D = {
       g.position.x += (to[0] - g.position.x) * k; g.position.z += (to[2] - g.position.z) * k;
       let y = to[1]; if (ch.hop > 0) { ch.hop -= dt * 2.4; y += Math.sin(Math.max(0, ch.hop) * Math.PI) * 0.45; }
       g.position.y += (y - g.position.y) * Math.min(1, k * 3);
-      g.rotation.y += (to[3] - g.rotation.y) * k; g.scale.y = 1 + Math.sin(ms * 0.003 + ch.ph) * 0.015;
+      let dr = to[3] - g.rotation.y; dr = Math.atan2(Math.sin(dr), Math.cos(dr)); g.rotation.y += dr * k; g.scale.y = 1 + Math.sin(ms * 0.003 + ch.ph) * 0.015;
       const p = this.project(g.position.x, g.position.y + 2.05, g.position.z);
       ch.lab.hidden = !p || ch === mine; if (p) { ch.lab.style.left = p[0] + '%'; ch.lab.style.top = p[1] + '%'; }
     }

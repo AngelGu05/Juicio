@@ -36,6 +36,11 @@ const App = {
     else App.toast('Sin conexión. Reintentando…');
   },
 
+  sendPos(pos) {
+    if (App.mode === 'local') Game.setPos(App.local, App.me, pos);
+    else if (App.ws && App.ws.readyState === 1) App.ws.send(JSON.stringify(Object.assign({ t: 'pos' }, pos)));
+  },
+
   // --- una sola pantalla ---
   startLocal(name) {
     App.mode = 'local'; App.local = Game.newState('', 'local'); App.me = 'p1'; App._n = 1;
@@ -58,6 +63,7 @@ const App = {
       const m = JSON.parse(e.data);
       if (m.t === 'joined') { App.code = m.code; App.me = m.pid; store.set('pid', m.pid); store.set('room', m.code); }
       else if (m.t === 'state') { App.s = m.s; App.offset = m.s.now - Date.now(); App.render(); }
+      else if (m.t === 'pos') { const p = App.s && App.s.players[m.id]; if (p) { p.pos = m.home ? null : { x: m.x, z: m.z, r: m.r }; if (Court.is3d) Stage3D.sync(App.s); } }
       else if (m.t === 'fx') Court.fx(m.fx);
       else if (m.t === 'err') { App.toast(m.m); if (m.fatal) App.leave(); }
     };

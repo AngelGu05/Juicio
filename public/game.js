@@ -13,6 +13,7 @@
       code, mode, hostId: null, phase: 'lobby', players: {}, order: [],
       settings: { prepMin: 2, pace: 'normal' },
       caseIdx: Math.floor(Math.random() * D.CASES.length), custom: null, guiltMode: 'azar',
+      items: { mazo: null, esposas: null, empanada: null },
       kase: null, speaker: null, timerEnd: null, evidence: [], shown: null,
       witness: null, witnessCall: null, witnessCard: '', objection: null,
       questions: [], question: null, votes: {}, voteClosed: false, verdict: null, sentence: '',
@@ -42,6 +43,8 @@
   const sideOf = p => (p && D.ROLES[p.role] && D.ROLES[p.role].side) || null;
   const isAdvocate = (s, p) => { const sd = sideOf(p); return !!sd && advocate(s, sd).id === p.id; };
   const jailed = (p, now) => p.jailedUntil > now;
+  // Suelta lo que lleva en la mano; el mazo, las esposas y la empanada vuelven a su sitio.
+  function dropItem(s, p) { if (p.hold && p.hold in s.items) s.items[p.hold] = null; p.hold = null; }
 
   function say(s, kind, text, by) {
     s.log.push({ id: uid(), t: Date.now(), kind, text, by: by || null });
@@ -84,15 +87,18 @@
 
   function start(s, now) {
     if (!byRole(s, 'juez') || !byRole(s, 'demandante') || !byRole(s, 'demandado')) return 'Faltan el juez, el demandante o el demandado.';
-    list(s).forEach(p => { if (!p.role) p.role = 'publico'; p.jailedUntil = 0; p.warnings = 0; p.tomatoes = 3; p.objections = 3; });
+    list(s).forEach(p => { if (!p.role) p.role = 'publico'; p.pos = null; p.jailedUntil = 0; p.warnings = 0; p.tomatoes = 3; p.objections = 3; });
     const c = s.custom || D.CASES[s.caseIdx];
     const guilty = s.custom && s.guiltMode !== 'azar' ? s.guiltMode === 'si' : Math.random() < 0.5;
     s.kase = {
-      title: c.t, summary: c.s, guilty,
+      id: uid(), title: c.t, summary: c.s, guilty,
       pSecret: c.p || 'Tú presentaste la demanda. Convence a la sala de que tienes razón.',
       dSecret: guilty ? 'ERES CULPABLE. ' + (c.g || 'Lo hiciste. Que no se note.') : 'ERES INOCENTE. ' + (c.i || 'No lo hiciste. Demuéstralo.'),
     };
     s.evidence = []; s.shown = null; s.questions = []; s.sentence = ''; s.awards = {}; s.log = [];
+    s.items = { mazo: null, esposas: null, empanada: null };
+    list(s).forEach(p => { p.hold = null; p.bribe = null; p.wetUntil = 0; });
+    const po = byRole(s, 'policia'); if (po) { po.hold = 'esposas'; s.items.esposas = po.id; }
     enter(s, 'caso', now);
     return null;
   }
@@ -170,8 +176,58 @@
       }
       case 'react': {
         if (jailed(p, now)) return E('Estás en la celda.');
-        if (!['aplauso', 'abucheo', 'murmullo', 'risa', 'sorpresa'].includes(a.kind)) break;
+        if (!['aplauso', 'abucheo', 'murmullo', 'risa', 'sorpresa', 'saludo', 'senalar', 'baile', 'reverencia', 'facepalm'].includes(a.kind)) break;
         fx.push({ k: 'react', by: pid, kind: a.kind }); break;
+      }
+      case 'take': {
+        if (L) break;
+        if (jailed(p, now)) return E('Desde la celda no alcanzas nada.');
+        if (p.hold) return E('Ya llevas algo en la mano. Suéltalo primero.');
+        const o = a.obj;
+        if (o === 'libro' || o === 'vaso') { p.hold = o; break; }
+        if (!(o in s.items)) break;
+        if (s.items[o]) return E(s.items[o] === 'gone' ? 'Ya se comieron la empanada.' : 'Eso ya lo tiene alguien.');
+        if (o === 'esposas' && !(poli || (juez && !hayPoli))) return E('Las esposas son del policía.');
+        s.items[o] = pid; p.hold = o;
+        if (o === 'mazo' && !juez) { say(s, 'sys', p.name + ' se robó el mazo.'); fx.push({ k: 'banner', text: '¡Se robaron el mazo!', tone: 'no' }); }
+        break;
+      }
+      case 'drop': dropItem(s, p); break;
+      case 'give': {
+        const t = s.players[a.to]; if (!t || t.id === pid || !p.hold) break;
+        if (jailed(p, now)) return E('Estás en la celda.');
+        if (p.hold === 'empanada' && (t.role === 'publico' || s.witness === t.id)) {
+          t.bribe = pid; s.items.empanada = 'gone'; p.hold = null; fx.push({ k: 'word', to: t.id, text: 'ñam, ñam…' }); break;
+        }
+        if (t.hold) return E(t.name + ' ya lleva algo en la mano.');
+        const o = p.hold; p.hold = null; t.hold = o; if (o in s.items) s.items[o] = t.id;
+        break;
+      }
+      case 'throw': {
+        const t = s.players[a.to]; if (!t || t.id === pid) break;
+        if (p.hold !== 'libro' && p.hold !== 'vaso') return E('No llevas nada que lanzar.');
+        if (jailed(p, now)) return E('Estás en la celda.');
+        const o = p.hold; p.hold = null; if (o === 'vaso') t.wetUntil = now + 8000;
+        fx.push({ k: 'throw', by: pid, to: t.id, obj: o }); break;
+      }
+      case 'confiscate': {
+        if (!(poli || (juez && !hayPoli))) return E('Eso le toca al policía.');
+        const t = s.players[a.to]; if (!t || !t.hold) break;
+        say(s, 'sys', p.name + ' le decomisa algo a ' + t.name + '.'); dropItem(s, t);
+        fx.push({ k: 'word', to: t.id, text: '¡Decomisado!' }); break;
+      }
+      case 'order': {
+        if (!juez || L) return E('Solo el juez pone orden.');
+        list(s).forEach(q => { dropItem(s, q); q.pos = null; });
+        const po = byRole(s, 'policia'); if (po) { po.hold = 'esposas'; s.items.esposas = po.id; }
+        say(s, 'sys', 'El juez ordena que todos vuelvan a su lugar.');
+        fx.push({ k: 'gavel' }, { k: 'order' }, { k: 'banner', text: '¡ORDEN!' }); break;
+      }
+      case 'use': {
+        if (L) break;
+        if (jailed(p, now)) return E('Desde la celda no alcanzas nada.');
+        if (!/^[a-z0-9_]{1,16}$/.test(a.obj || '')) break;
+        fx.push({ k: 'use', by: pid, obj: a.obj }); break;
       }
       case 'tomato': {
         if (p.role !== 'publico') return E('Solo el público lanza tomates.');
@@ -193,7 +249,13 @@
         say(s, 'sys', 'Objeción: ' + s.objection.ruling.toLowerCase() + '.');
         fx.push({ k: 'banner', text: s.objection.ruling, tone: a.ok ? 'ok' : 'no' }); break;
       }
-      case 'gavel': if (!juez) return E('El mazo es del juez.'); fx.push({ k: 'gavel' }, { k: 'banner', text: '¡Orden en la sala!' }); break;
+      case 'gavel': {
+        const h = s.items.mazo;
+        if (juez) { if (h && h !== pid) return E('Te robaron el mazo. Lo tiene ' + s.players[h].name + '.'); fx.push({ k: 'gavel' }, { k: 'banner', text: '¡Orden en la sala!' }); }
+        else if (p.hold === 'mazo') fx.push({ k: 'gavel' }, { k: 'banner', text: '¡Desorden en la sala!', tone: 'no' });
+        else return E('El mazo es del juez.');
+        break;
+      }
       case 'warn': {
         if (!juez) return E('Solo el juez advierte.');
         const t = s.players[a.to]; if (!t || t.role === 'juez') break;
@@ -203,6 +265,8 @@
       case 'jail': {
         if (!(poli || (juez && !hayPoli))) return E(hayPoli ? 'Eso le toca al policía.' : 'Solo el juez.');
         const t = s.players[a.to]; if (!t || t.role === 'juez' || t.id === pid) break;
+        if (poli && p.hold !== 'esposas') return E('Necesitas las esposas en la mano.');
+        dropItem(s, t);
         t.jailedUntil = now + 30000; say(s, 'sys', t.name + ' va a la celda 30 segundos.');
         fx.push({ k: 'jail', to: t.id }); break;
       }
@@ -278,6 +342,7 @@
       }
       case 'closeVote': {
         if (!juez || s.phase !== 'veredicto' || s.voteClosed) break;
+        if (s.items.mazo && s.items.mazo !== pid) return E('Sin el mazo no puedes cerrar la votación. Lo tiene ' + s.players[s.items.mazo].name + '.');
         s.voteClosed = true;
         const v = Object.values(s.votes), c = v.filter(x => x === 'culpable').length, i = v.length - c;
         if (c !== i) { s.verdict = c > i ? 'culpable' : 'inocente'; fx.push({ k: 'gavel' }, { k: 'banner', text: c > i ? '¡CULPABLE!' : '¡INOCENTE!', tone: c > i ? 'no' : 'ok' }); }
@@ -300,9 +365,20 @@
   }
 
   function seat(s, t) {
-    s.witness = t.id; s.witnessCall = null;
+    t.pos = null; s.witness = t.id; s.witnessCall = null;
     s.witnessCard = t.role === 'publico' ? pick(D.WITNESS_CARDS) : 'Eres parte del caso. Responde según lo que sabes… o lo que te convenga.';
     say(s, 'sys', t.name + ' sube al estrado.');
+  }
+
+  // Posición de un jugador que camina por la sala. Devuelve true si se aceptó.
+  function setPos(s, pid, m) {
+    const p = s.players[pid]; if (!p || s.phase === 'lobby' || !m) return false;
+    if (m.home) { p.pos = null; return true; }
+    if (p.jailedUntil > Date.now() || s.witness === pid) return false;
+    const x = +m.x, z = +m.z, r = +m.r; if (![x, z, r].every(Number.isFinite)) return false;
+    const q = v => Math.round(v * 100) / 100;
+    p.pos = { x: q(Math.max(-6.6, Math.min(6.6, x))), z: q(Math.max(-6.6, Math.min(7.1, z))), r: q(Math.atan2(Math.sin(r), Math.cos(r))) };
+    return true;
   }
 
   // Lo que ve cada jugador: se quitan los secretos que no le corresponden.
@@ -318,9 +394,10 @@
     if (s.witness !== pid) v.witnessCard = '';
     if (s.phase === 'veredicto' && !s.verdict) { const mine = s.votes[pid]; v.voteCount = Object.keys(s.votes).length; v.votes = mine ? { [pid]: mine } : {}; }
     // Las pruebas en borrador solo las ve su lado.
+    if (s.phase !== 'fin') for (const id in v.players) if (id !== pid) delete v.players[id].bribe;
     v.evidence = v.evidence.filter(e => e.status !== 'borrador' || e.side === sideOf(p));
     return v;
   }
 
-  return { newState, addPlayer, act, view, list, byRole, publico, advocate, sideOf, isAdvocate };
+  return { newState, addPlayer, act, view, setPos, list, byRole, publico, advocate, sideOf, isAdvocate };
 });

@@ -2,7 +2,8 @@
 const Court = {
   pos: {}, splat: {}, sig: '', is3d: false, want3d: store.get('3d', true),
   SPOT: { juez: [50, 52], policia: [32, 56], demandante: [10, 72], abogado_dte: [22, 72], abogado_ddo: [78, 72], demandado: [90, 72] },
-  WORDS: { aplauso: '¡Bravo!', abucheo: '¡Buuu!', murmullo: 'bla, bla, bla…', risa: '¡Ja, ja, ja!', sorpresa: '¡¿Qué?!' },
+  WORDS: { aplauso: '¡Bravo!', abucheo: '¡Buuu!', murmullo: 'bla, bla, bla…', risa: '¡Ja, ja, ja!', sorpresa: '¡¿Qué?!', saludo: '¡Hola!', senalar: '¡Fue esa persona!', baile: '¡Eso, eso!', reverencia: 'Con todo respeto…', facepalm: 'Ay, no…' },
+  LABELS: { aplauso: 'Aplaudir', abucheo: 'Abuchear', murmullo: 'Murmurar', risa: 'Reír', sorpresa: 'Sorpresa', saludo: 'Saludar', senalar: 'Señalar', baile: 'Bailar', reverencia: 'Reverencia', facepalm: 'Mano a la cara' },
 
   base() {
     if (!Court._base) { const b = document.createElement('div'); b.className = 'base'; $('stage').appendChild(b); Court._base = b; }
@@ -52,9 +53,12 @@ const Court = {
     Panels.render(s); Evidence.render(s); Court.tick();
   },
 
+  HOLD: { mazo: 'el mazo', esposas: 'las esposas', empanada: 'una empanada', libro: 'un libro', vaso: 'un vaso de agua' },
+  near(id, d) { if (!Court.is3d) return true; const a = Stage3D.chars[App.me], b = Stage3D.chars[id]; return !!(a && b) && a.g.position.distanceTo(b.g.position) < (d || 2.7); },
   signature() {
     const s = App.s, now = App.now();
-    return Game.list(s).filter(p => p.jailedUntil > now).map(p => p.id).join() + '|' + Object.keys(Court.splat).filter(k => Court.splat[k] > Date.now()).join();
+    const wet = Game.list(s).filter(p => p.wetUntil > now).map(p => p.id).join();
+    return wet + '|' + Game.list(s).filter(p => p.jailedUntil > now).map(p => p.id).join() + '|' + Object.keys(Court.splat).filter(k => Court.splat[k] > Date.now()).join();
   },
 
   tick() {
@@ -100,7 +104,14 @@ const Court = {
       else if (f.k === 'sign') {
         const old = $('stage').querySelector(`.sign[data-by="${f.by}"]`); if (old) old.remove();
         Court.put('sign', f.text, Court.head(f.by), 4500).dataset.by = f.by; Court.hop(f.by);
-      } else if (f.k === 'react') Court.put('word', Court.WORDS[f.kind] || '', Court.head(f.by), 1600);
+      } else if (f.k === 'react') { Court.put('word', Court.WORDS[f.kind] || '', Court.head(f.by), 1600); if (Court.is3d) Stage3D.emote(f.by, f.kind); }
+      else if (f.k === 'word') Court.put('word', f.text, Court.head(f.to), 1700);
+      else if (f.k === 'order') { if (Court.is3d) { Stage3D.mine = {}; Stage3D.sync(App.s); } }
+      else if (f.k === 'throw') {
+        if (Court.is3d) Stage3D.throwObj(f.by, f.to, f.obj);
+        setTimeout(() => { Court.put('word', f.obj === 'vaso' ? '¡Splash!' : '¡Pum!', Court.head(f.to), 1500); Court.beep(f.obj === 'vaso' ? 700 : 110, 0.12, 'triangle'); if (Court.is3d) Stage3D.hop(f.to); }, 560);
+      }
+      else if (f.k === 'use') { if (Court.is3d) Stage3D.useFx(f.obj, f.by); else Court.put('word', (Stage3D.THINGS[f.obj] || {}).word || '', Court.head(f.by), 1600); }
       else if (f.k === 'banner') Court.banner(f.text, f.tone);
       else if (f.k === 'gavel') {
         const st = $('stage'); st.classList.remove('shake'); void st.offsetWidth; st.classList.add('shake'); if (Court.is3d) Stage3D.hitGavel();
@@ -131,10 +142,14 @@ const Court = {
     if (juez && s.speaker !== id) b('Dar la palabra', { type: 'giveWord', to: id }, 'gold');
     if ((juez || adv) && s.phase === 'pruebas' && s.witness !== id && !['juez', 'policia'].includes(t.role)) b('Llamar al estrado', { type: 'callWitness', to: id });
     if (juez && t.role !== 'juez') b('Advertencia' + (t.warnings ? ' (lleva ' + t.warnings + ')' : ''), { type: 'warn', to: id });
-    if ((poli || (juez && !hayPoli)) && !self && t.role !== 'juez') b('Mandar a la celda 30 s', { type: 'jail', to: id }, 'red');
+    const near = Court.near(id), H = Court.HOLD; let far = false;
+    if ((poli || (juez && !hayPoli)) && !self && t.role !== 'juez') { if (!poli || near) b(poli ? 'Esposar: a la celda 30 s' : 'Mandar a la celda 30 s', { type: 'jail', to: id }, 'red'); else far = true; }
+    if (!self && (me.hold === 'libro' || me.hold === 'vaso')) b('Lanzarle ' + H[me.hold], { type: 'throw', to: id }, 'red');
+    if (!self && me.hold) { if (near) b('Entregarle ' + H[me.hold], { type: 'give', to: id }); else far = true; }
+    if (!self && t.hold && (poli || (juez && !hayPoli))) { if (near) b('Quitarle ' + H[t.hold], { type: 'confiscate', to: id }); else far = true; }
     if (me.role === 'publico' && !self) b('Lanzar tomate (' + me.tomatoes + ')', { type: 'tomato', to: id }, me.tomatoes ? 'red' : '');
     const m = $('menu');
-    m.innerHTML = `<b>${esc(t.name)}</b><span class="note">${D.ROLES[t.role].name}${t.warnings ? ' · ' + t.warnings + ' advertencia(s)' : ''}</span>` + items.join('');
+    m.innerHTML = `<b>${esc(t.name)}</b><span class="note">${D.ROLES[t.role].name}${t.warnings ? ' · ' + t.warnings + ' advertencia(s)' : ''}${t.hold ? ' · lleva ' + H[t.hold] : ''}</span>` + items.join('') + (far ? '<span class="note">Acércate para esposar, entregar o quitar cosas.</span>' : '');
     m.hidden = false;
     m.style.left = Math.max(8, Math.min(x, innerWidth - m.offsetWidth - 8)) + 'px';
     m.style.top = Math.max(8, Math.min(y, innerHeight - m.offsetHeight - 8)) + 'px';
@@ -151,7 +166,7 @@ $('chatForm').addEventListener('submit', e => {
   App.act({ type: 'chat', text: t }); $('chatInput').value = '';
 });
 $('reacts').innerHTML = Object.keys(Court.WORDS).map(k =>
-  `<button class="btn small" data-act='{"type":"react","kind":"${k}"}'>${Court.WORDS[k]}</button>`).join('');
+  `<button class="btn small" data-act='{"type":"react","kind":"${k}"}'>${Court.LABELS[k]}</button>`).join('');
 
 $('btnView').onclick = () => { Court.want3d = !Court.want3d; store.set('3d', Court.want3d); if (App.s) Court.render(App.s); };
 $('btnCam').onclick = () => Stage3D.nextView();

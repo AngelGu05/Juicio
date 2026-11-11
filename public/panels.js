@@ -30,6 +30,10 @@ const Panels = {
       h += Panels.awards(s, me);
     }
 
+    if (me.hold) h += `<div class="secretBox"><b>Llevas en la mano: ${Court.HOLD[me.hold]}.</b><div class="acts">${me.hold === 'mazo' && !juez ? B('Golpear el mazo', { type: 'gavel' }, 'gold') : ''}${B('Soltar', { type: 'drop' })}</div>
+      <p class="note">Toca a alguien para ${me.hold === 'libro' || me.hold === 'vaso' ? 'lanzárselo o ' : ''}entregárselo.</p></div>`;
+    const thief = s.items && s.items.mazo && s.items.mazo !== me.id ? s.players[s.items.mazo] : null;
+    if (juez && thief) h += `<p class="secretBox"><b>Te robaron el mazo.</b> Lo tiene ${esc(thief.name)}. Sin él no puedes pedir orden ni cerrar la votación: que el policía se lo quite, o usa "¡Orden!".</p>`;
     const a = [];
     if (juez) {
       const i = D.PHASES.findIndex(p => p.id === s.phase);
@@ -41,7 +45,7 @@ const Panels = {
       }
       const blocked = (s.phase === 'veredicto' && !s.verdict) || (s.phase === 'sentencia' && !s.sentence);
       if (nx && !blocked) a.push(B('Siguiente: ' + nx.name, { type: 'next' }, 'gold'));
-      if (s.phase !== 'caso' && s.phase !== 'fin') a.push(B('Mazo: ¡orden en la sala!', { type: 'gavel' }));
+      if (s.phase !== 'caso' && s.phase !== 'fin') a.push(B('Mazo: ¡orden en la sala!', { type: 'gavel' }), B('¡Orden! Todos a su lugar', { type: 'order' }, 'red'));
       if (s.objection && !s.objection.ruling) h += `<div class="secretBox"><b>${name(s.objection.by)} objeta.</b><div class="votes">${B('Ha lugar', { type: 'rule', ok: true }, 'ok')}${B('No ha lugar', { type: 'rule', ok: false }, 'red')}</div></div>`;
       if (s.phase === 'publico') {
         const qs = s.questions.filter(q => !q.used);
@@ -104,6 +108,7 @@ const Panels = {
     if (Game.sideOf(me) === 'dte') parts.push(s.kase.pSecret);
     if (me.role === 'abogado_ddo') parts.push('Tu cliente sabe si es culpable o inocente. Tú no: pregúntale… y decide si le crees.');
     if (s.witness === me.id && s.witnessCard) parts.push('Tu papel como testigo: ' + s.witnessCard);
+    if (me.bribe) parts.push(((s.players[me.bribe] || {}).name || 'Alguien') + ' te dio una empanada y te la comiste. Estás sobornado: favorece a su lado… o confiésalo ante el juez.');
     if (!parts.length) return '';
     if (App.mode === 'local' && !App.reveal) return `<h3>Información secreta</h3><p class="note">Pásale la pantalla a ${esc(me.name)} y que nadie más mire.</p><button class="btn" data-pan="reveal">Ver lo que solo sabe ${esc(me.name)}</button>`;
     return '<h3>Solo tú lo sabes</h3>' + parts.map(t => `<p class="secretBox">${esc(t)}</p>`).join('') +

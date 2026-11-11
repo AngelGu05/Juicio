@@ -148,6 +148,12 @@ label { font-weight: 800; }
 .tomato.hid { display: none; }
 .stageHint { color: var(--paper); opacity: .8; font-size: .82rem; margin-top: 8px; text-align: center; }
 
+.pad3d { position: absolute; left: 10px; bottom: 10px; z-index: 12; display: none; grid-template-columns: repeat(3, clamp(30px, 5vw, 44px)); gap: 4px; touch-action: none; user-select: none; }
+.stage.three .pad3d { display: grid; }
+.pad3d button { font: inherit; font-weight: 800; aspect-ratio: 1; border: 2px solid var(--ink); border-radius: 8px; background: #fff5dccc; color: var(--ink); cursor: pointer; padding: 0; }
+.pad3d button:active, .pad3d button.on { background: var(--gold); }
+.pad3d .home { grid-column: 1 / -1; aspect-ratio: auto; font-size: .72rem; padding: 3px 0; }
+
 /* Paneles */
 .acts { display: flex; flex-wrap: wrap; gap: 7px; }
 .pill { display: inline-block; background: var(--ink); color: var(--paper); border-radius: 99px; padding: 1px 9px; font-size: .78rem; }

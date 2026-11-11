@@ -60,6 +60,11 @@ wss.on('connection', ws => {
       if (!known && m.acc) Game.act(room.state, pid, { type: 'setAcc', acc: m.acc });
       send(ws, { t: 'joined', code, pid });
       broadcast(room);
+    } else if (m.t === 'pos' && room) {
+      // Movimiento: se reenvía solo la posición, sin mandar todo el estado.
+      if (!Game.setPos(room.state, pid, m)) return;
+      const p = room.state.players[pid], out = p.pos ? { t: 'pos', id: pid, x: p.pos.x, z: p.pos.z, r: p.pos.r } : { t: 'pos', id: pid, home: true };
+      for (const [id, w] of room.socks) if (id !== pid) send(w, out);
     } else if (m.t === 'act' && room) {
       const r = Game.act(room.state, pid, m.a || {});
       if (r.err) send(ws, { t: 'err', m: r.err }); else broadcast(room, r.fx);
